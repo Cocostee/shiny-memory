@@ -36,7 +36,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        browser: [edge, firefox]
+        browser: [chrome]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
