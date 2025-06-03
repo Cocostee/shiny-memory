@@ -63,9 +63,10 @@ jobs:
 
       - name: Deploy to production via SSH
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            cd shiny-memory && git pull &&
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd shiny-memory && 
+            git pull origin main &&
             npm install &&
             npm run build &&
-            (pm2 restart shiny-memory || pm2 start npm --name "shiny-memory" -- run start)
+            pm2 restart shiny-memory || pm2 start npm --name shiny-memory -- run start
           '
