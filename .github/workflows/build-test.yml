@@ -48,25 +48,46 @@ jobs:
           path: cypress/screenshots
           retention-days: 5
 
-  deploy:
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: test
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - name: Setup SSH key
+  #       run: |
+  #         mkdir -p ~/.ssh
+  #         echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+  #         chmod 600 ~/.ssh/id_rsa
+  #         ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+  #     - name: Deploy to production via SSH
+  #       run: |
+  #         ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+  #           cd shiny-memory &&
+  #           git pull origin main &&
+  #           npm install &&
+  #           npm run build &&
+  #           pm2 restart shiny-memory || pm2 start npm --name shiny-memory -- run start
+  #         '
+
+  docker-deploy:
     runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to production via SSH
+      - name: Build Docker image
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            cd shiny-memory && 
-            git pull origin main &&
-            npm install &&
-            npm run build &&
-            pm2 restart shiny-memory || pm2 start npm --name shiny-memory -- run start
-          '
+          docker build -t ghcr.io/cocostee/shiny-memory/nodejs-my-website .
+
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/cocostee/shiny-memory/nodejs-my-website
