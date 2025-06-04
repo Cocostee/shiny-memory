@@ -71,7 +71,7 @@ jobs:
   #           pm2 restart shiny-memory || pm2 start npm --name shiny-memory -- run start
   #         '
 
-  docker-deploy:
+  build-docker:
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -82,12 +82,30 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.DOCKER_KEY }}
 
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/cocostee/shiny-memory/nodejs-my-website .
+          docker build -t ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest .
 
       - name: Push Docker image
         run: |
-          docker push ghcr.io/cocostee/shiny-memory/nodejs-my-website
+          docker push ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest
+
+  deploy-docker:
+    runs-on: ubuntu-latest
+    needs: build-docker
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy and update stack
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd /chemin/vers/votre/app &&
+            docker compose -f docker-compose.prod.yml pull &&
+            docker compose -f docker-compose.prod.yml up -d
