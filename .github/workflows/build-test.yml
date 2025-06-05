@@ -1,6 +1,5 @@
 name: CI + Build Docker + Déploiement
 
-# On ne déclenche QUE sur main et develop
 on:
   push:
     branches:
@@ -8,9 +7,6 @@ on:
       - develop
 
 jobs:
-  ####################################
-  # 1) Build / Compilation Node + Next #
-  ####################################
   build:
     name: 🛠️ Build / Compilation
     runs-on: ubuntu-latest
@@ -32,9 +28,6 @@ jobs:
       - name: Compiler l’application Next.js
         run: npm run build
 
-  ##########################
-  # 2) Exécution des tests #
-  ##########################
   test:
     name: ✅ Tests Cypress
     runs-on: ubuntu-latest
@@ -84,9 +77,6 @@ jobs:
           path: cypress/screenshots
           retention-days: 5
 
-  ##################################################
-  # 3) Build & Push de l’image Docker sur GHCR.io  #
-  ##################################################
   build-docker:
     name: 📦 Build & Push Docker
     runs-on: ubuntu-latest
@@ -110,15 +100,10 @@ jobs:
         run: |
           docker push ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest
 
-  ########################################################
-  # 4) Déploiement en prod (branche main)                #
-  #    → git checkout main + docker-compose -f prod/...  #
-  ########################################################
   deploy-prod:
     name: 🚀 Déploiement Prod (branche main)
     runs-on: ubuntu-latest
     needs: build-docker
-    # On ne lance cette étape QUE si on est sur main
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Préparer la clé SSH
@@ -133,22 +118,18 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
           set -e
 
-          # 1) Si le dossier ~/prod n'existe pas ou n'est pas un repo Git, on le supprime et on clone
           if [ ! -d "/home/${{ secrets.SSH_USER }}/prod/.git" ]; then
             echo "Le dossier ~/prod n'est pas un dépôt Git valide. Suppression et re-clonage."
             rm -rf /home/${{ secrets.SSH_USER }}/prod
             git clone --branch main https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/prod
           fi
 
-          # 2) Aller dans ~/prod
           cd /home/${{ secrets.SSH_USER }}/prod
 
-          # 3) S’assurer d’être sur la branche main et à jour
           git fetch origin
           git checkout main
           git reset --hard origin/main
 
-          # 4) Se logger sur GHCR (pour docker pull)
           echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
           if ! docker network ls --format '{{.Name}}' | grep -qw traefik; then
@@ -165,20 +146,14 @@ jobs:
             echo "✅ Traefik tourne déjà, on ne fait rien"
           fi
 
-          # 5) Pull de la dernière image + relance des containers en prod
           docker compose -f prod/docker-compose.yml pull
           docker compose -f prod/docker-compose.yml up -d
           EOF
 
-  ########################################################
-  # 5) Déploiement en test (branche develop)              #
-  #    → git checkout develop + docker-compose -f test/...#
-  ########################################################
   deploy-test:
     name: 🚧 Déploiement Test (branche develop)
     runs-on: ubuntu-latest
     needs: build-docker
-    # On ne lance cette étape QUE si on est sur develop
     if: github.ref == 'refs/heads/develop'
     steps:
       - name: Préparer la clé SSH
@@ -193,25 +168,20 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
           set -e
 
-          # 1) Si le dossier ~/test n'existe pas ou n'est pas un repo Git, on le supprime et on clone
           if [ ! -d "/home/${{ secrets.SSH_USER }}/test/.git" ]; then
             echo "Le dossier ~/test est absent ou invalide. Suppression et clonage propre."
             rm -rf /home/${{ secrets.SSH_USER }}/test
             git clone --branch develop https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/test
           fi
 
-          # 2) Aller dans ~/test
           cd /home/${{ secrets.SSH_USER }}/test
 
-          # 3) S’assurer d’être sur la branche develop et à jour
           git fetch origin
           git checkout develop
           git reset --hard origin/develop
 
-          # 4) Se loguer sur GHCR (pour docker pull)
           echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-          # 4bis) Créer le network 'traefik' s'il n'existe pas
           if ! docker network ls --format '{{.Name}}' | grep -qw traefik; then
             echo "➡️ Le network 'traefik' n'existe pas, création..."
             docker network create traefik
@@ -219,7 +189,6 @@ jobs:
             echo "✅ Le network 'traefik' existe déjà"
           fi
 
-          if [ -z "$(docker ps --filter "name=traefik" --filter "status=running" -q)" ]; then
             echo "➡️ Traefik n'est pas actif, lancement..."
             docker compose -f /home/${{ secrets.SSH_USER }}/test/traefik/docker-compose.yml up -d
           else
