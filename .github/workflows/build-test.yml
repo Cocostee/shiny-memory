@@ -133,9 +133,10 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
           set -e
 
-          # 1) Si le dossier ~/prod n'existe pas, on clone la première fois
-          if [ ! -d "/home/${{ secrets.SSH_USER }}/prod" ]; then
-            echo "Clonage initial du repo (branche main) dans ~/prod"
+          # 1) Si le dossier ~/prod n'existe pas ou n'est pas un repo Git, on le supprime et on clone
+          if [ ! -d "/home/${{ secrets.SSH_USER }}/prod/.git" ]; then
+            echo "Le dossier ~/prod n'est pas un dépôt Git valide. Suppression et re-clonage."
+            rm -rf /home/${{ secrets.SSH_USER }}/prod
             git clone --branch main https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/prod
           fi
 
@@ -178,9 +179,10 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
           set -e
 
-          # 1) Si le dossier ~/test n'existe pas, on clone la première fois
-          if [ ! -d "/home/${{ secrets.SSH_USER }}/test" ]; then
-            echo "Clonage initial du repo (branche develop) dans ~/test"
+          # 1) Si le dossier ~/test n'existe pas ou n'est pas un repo Git, on le supprime et on clone
+          if [ ! -d "/home/${{ secrets.SSH_USER }}/test/.git" ]; then
+            echo "Le dossier ~/test est absent ou invalide. Suppression et clonage propre."
+            rm -rf /home/${{ secrets.SSH_USER }}/test
             git clone --branch develop https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/test
           fi
 
