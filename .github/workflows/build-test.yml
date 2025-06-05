@@ -153,7 +153,7 @@ jobs:
 
           if [ -z "$(docker ps --filter "name=traefik" --filter "status=running" -q)" ]; then
             echo "➡️ Traefik n'est pas actif, lancement..."
-            docker compose -f /home/${{ secrets.SSH_USER }}/traefik/docker-compose.yml up -d
+            docker compose -f /home/${{ secrets.SSH_USER }}/prod/traefik/docker-compose.yml up -d
           else
             echo "✅ Traefik tourne déjà, on ne fait rien"
           fi
@@ -206,7 +206,7 @@ jobs:
 
           if [ -z "$(docker ps --filter "name=traefik" --filter "status=running" -q)" ]; then
             echo "➡️ Traefik n'est pas actif, lancement..."
-            docker compose -f /home/${{ secrets.SSH_USER }}/traefik/docker-compose.yml up -d
+            docker compose -f /home/${{ secrets.SSH_USER }}/test/traefik/docker-compose.yml up -d
           else
             echo "✅ Traefik tourne déjà, on ne fait rien"
           fi
