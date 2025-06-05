@@ -11,3 +11,7 @@ services:
       - "traefik.http.services.web-prod.loadbalancer.server.port=3000"
     networks:
       - traefik
+
+networks:
+  traefik:
+    external: true
