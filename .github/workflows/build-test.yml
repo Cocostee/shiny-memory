@@ -1,100 +1,124 @@
-on: [push]
+name: CI + Build Docker + Déploiement
+
+# On ne déclenche QUE sur main et develop
+on:
+  push:
+    branches:
+      - main
+      - develop
 
 jobs:
+  ####################################
+  # 1) Build / Compilation Node + Next #
+  ####################################
   build:
+    name: 🛠️ Build / Compilation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Cache node_modules
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Cache node_modules + Cypress cache
         uses: actions/cache@v4
         with:
           path: |
             node_modules
-             /home/runner/.cache/Cypress
+            ~/.cache/Cypress
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-      - run: npm install
-      - run: npm run build
 
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Compiler l’application Next.js
+        run: npm run build
+
+  ##########################
+  # 2) Exécution des tests #
+  ##########################
   test:
+    name: ✅ Tests Cypress
     runs-on: ubuntu-latest
     needs: build
     strategy:
       matrix:
         browser: ["chrome", "edge"]
     steps:
-      - uses: actions/checkout@v4
-      - name: Cache node_modules
-        uses: actions/cache/restore@v4
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Restaurer cache node_modules + Cypress cache
+        uses: actions/cache@v4
         with:
           path: |
             node_modules
-             /home/runner/.cache/Cypress
+            ~/.cache/Cypress
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-      - uses: cypress-io/github-action@v6
+
+      - name: Installer avec ci (pour être certain d’avoir un build identique au CI)
+        run: npm ci
+
+      - name: Lancer le serveur Next en tâche de fond
+        run: npm run dev &
+
+      - name: Attendre 5 secondes que Next.js soit up
+        run: sleep 5
+
+      - name: Lancer Cypress
+        uses: cypress-io/github-action@v6
         with:
-          install: false
-          start: npm run dev
           browser: ${{ matrix.browser }}
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload des vidéos Cypress
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: cypress-videos-${{ matrix.browser }}
           path: cypress/videos
           retention-days: 5
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload des screenshots Cypress (si échec)
         if: failure()
+        uses: actions/upload-artifact@v4
         with:
           name: cypress-screenshots-${{ matrix.browser }}
           path: cypress/screenshots
           retention-days: 5
 
-  # deploy:
-  #   runs-on: ubuntu-latest
-  #   needs: test
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - name: Setup SSH key
-  #       run: |
-  #         mkdir -p ~/.ssh
-  #         echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-  #         chmod 600 ~/.ssh/id_rsa
-  #         ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
-  #     - name: Deploy to production via SSH
-  #       run: |
-  #         ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-  #           cd shiny-memory &&
-  #           git pull origin main &&
-  #           npm install &&
-  #           npm run build &&
-  #           pm2 restart shiny-memory || pm2 start npm --name shiny-memory -- run start
-  #         '
-
+  ##################################################
+  # 3) Build & Push de l’image Docker sur GHCR.io  #
+  ##################################################
   build-docker:
+    name: 📦 Build & Push Docker
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Se logguer sur GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.DOCKER_KEY }}
 
-      - name: Build Docker image
+      - name: Construire l’image Docker
         run: |
-          docker build -t ghcr.io/cocostee/shiny-memory/nodejs-my-website .
+          docker build -t ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest .
 
-      - name: Push Docker image
+      - name: Pousser l’image sur GHCR
         run: |
-          docker push ghcr.io/cocostee/shiny-memory/nodejs-my-website
+          docker push ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest
 
-  deploy-docker:
-    needs: build-docker
+  ########################################################
+  # 4) Déploiement en prod (branche main)                #
+  #    → git checkout main + docker-compose -f prod/...  #
+  ########################################################
+  deploy-prod:
+    name: 🚀 Déploiement Prod (branche main)
     runs-on: ubuntu-latest
+    needs: build-docker
+    # On ne lance cette étape QUE si on est sur main
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Préparer la clé SSH
@@ -102,14 +126,76 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Déployer l'image Docker sur le serveur distant
+      - name: Déployer en Prod sur le serveur
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-            echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u ${{ secrets.SSH_USER }} --password-stdin
-            docker pull ghcr.io/cocostee/shiny-memory/nodejs-my-website
-            docker stop next-app || true
-            docker rm next-app || true
-            docker run -d --name next-app -p 80:3000 ghcr.io/cocostee/shiny-memory/nodejs-my-website
-          "
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e
+
+            # 1) Si le dossier ~/app n'existe pas, on clone la première fois
+            if [ ! -d "/home/${{ secrets.SSH_USER }}/app" ]; then
+              echo "Clonage initial du repo (branche main) dans ~/app"
+              git clone --branch main https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/app
+            fi
+
+            # 2) Aller dans ~/app
+            cd /home/${{ secrets.SSH_USER }}/app
+
+            # 3) S’assurer d’être sur la branche main et à jour
+            git fetch origin
+            git checkout main
+            git reset --hard origin/main
+
+            # 4) Se logger sur GHCR (pour docker pull)
+            echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # 5) Pull de la dernière image + relance des containers en prod
+            docker-compose -f prod/docker-compose.yml pull
+            docker-compose -f prod/docker-compose.yml up -d
+          EOF
+
+  ########################################################
+  # 5) Déploiement en test (branche develop)              #
+  #    → git checkout develop + docker-compose -f test/...#
+  ########################################################
+  deploy-test:
+    name: 🚧 Déploiement Test (branche develop)
+    runs-on: ubuntu-latest
+    needs: build-docker
+    # On ne lance cette étape QUE si on est sur develop
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - name: Préparer la clé SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Déployer en Test sur le serveur
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e
+
+            # 1) Si le dossier ~/app n'existe pas, on clone la première fois
+            if [ ! -d "/home/${{ secrets.SSH_USER }}/app" ]; then
+              echo "Clonage initial du repo (branche develop) dans ~/app"
+              git clone --branch develop https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/app
+            fi
+
+            # 2) Aller dans ~/app
+            cd /home/${{ secrets.SSH_USER }}/app
+
+            # 3) S’assurer d’être sur la branche develop et à jour
+            git fetch origin
+            git checkout develop
+            git reset --hard origin/develop
+
+            # 4) Se loguer sur GHCR (pour docker pull)
+            echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # 5) Pull de la dernière image + relance des containers en test
+            docker-compose -f test/docker-compose.yml pull
+            docker-compose -f test/docker-compose.yml up -d
+          EOF
