@@ -151,8 +151,8 @@ jobs:
             echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
             # 5) Pull de la dernière image + relance des containers en prod
-            docker-compose -f prod/docker-compose.yml pull
-            docker-compose -f prod/docker-compose.yml up -d
+            docker compose -f prod/docker-compose.yml pull
+            docker compose -f prod/docker-compose.yml up -d
           EOF
 
   ########################################################
@@ -196,6 +196,6 @@ jobs:
             echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
             # 5) Pull de la dernière image + relance des containers en test
-            docker-compose -f test/docker-compose.yml pull
-            docker-compose -f test/docker-compose.yml up -d
+            docker compose -f test/docker-compose.yml pull
+            docker compose -f test/docker-compose.yml up -d
           EOF
