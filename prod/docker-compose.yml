@@ -9,3 +9,5 @@ services:
       - "traefik.http.routers.web-prod.rule=Host(`next-prod.fr`)"
       - "traefik.http.routers.web-prod.entrypoints=web"
       - "traefik.http.services.web-prod.loadbalancer.server.port=3000"
+    networks:
+      - traefik

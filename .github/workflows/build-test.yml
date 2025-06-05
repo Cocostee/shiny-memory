@@ -151,6 +151,13 @@ jobs:
           # 4) Se logger sur GHCR (pour docker pull)
           echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+          if ! docker network ls --format '{{.Name}}' | grep -qw traefik; then
+            echo "➡️ Le network 'traefik' n'existe pas, création..."
+            docker network create traefik
+          else
+            echo "✅ Le network 'traefik' existe déjà"
+          fi
+
           if [ -z "$(docker ps --filter "name=traefik" --filter "status=running" -q)" ]; then
             echo "➡️ Traefik n'est pas actif, lancement..."
             docker compose -f /home/${{ secrets.SSH_USER }}/prod/traefik/docker-compose.yml up -d
@@ -203,6 +210,14 @@ jobs:
 
           # 4) Se loguer sur GHCR (pour docker pull)
           echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+          # 4bis) Créer le network 'traefik' s'il n'existe pas
+          if ! docker network ls --format '{{.Name}}' | grep -qw traefik; then
+            echo "➡️ Le network 'traefik' n'existe pas, création..."
+            docker network create traefik
+          else
+            echo "✅ Le network 'traefik' existe déjà"
+          fi
 
           if [ -z "$(docker ps --filter "name=traefik" --filter "status=running" -q)" ]; then
             echo "➡️ Traefik n'est pas actif, lancement..."

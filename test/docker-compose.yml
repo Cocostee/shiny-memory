@@ -9,3 +9,5 @@ services:
       - "traefik.http.routers.web-test.rule=Host(`next-test.fr`)"
       - "traefik.http.routers.web-test.entrypoints=web"
       - "traefik.http.services.web-test.loadbalancer.server.port=3000"
+    networks:
+      - traefik
