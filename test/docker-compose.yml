@@ -3,6 +3,6 @@ services:
     image: ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest
     restart: always
     ports:
-      - "69:3000"
+      - "8080:3000"
     environment:
       - NODE_ENV=development
