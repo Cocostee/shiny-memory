@@ -189,6 +189,7 @@ jobs:
             echo "✅ Le network 'traefik' existe déjà"
           fi
 
+          if [ -z "$(docker ps --filter "name=traefik" --filter "status=running" -q)" ]; then
             echo "➡️ Traefik n'est pas actif, lancement..."
             docker compose -f /home/${{ secrets.SSH_USER }}/test/traefik/docker-compose.yml up -d
           else
