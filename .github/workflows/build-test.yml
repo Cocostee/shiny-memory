@@ -131,28 +131,28 @@ jobs:
       - name: Déployer en Prod sur le serveur
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            set -e
+          set -e
 
-            # 1) Si le dossier ~/app n'existe pas, on clone la première fois
-            if [ ! -d "/home/${{ secrets.SSH_USER }}/app" ]; then
-              echo "Clonage initial du repo (branche main) dans ~/app"
-              git clone --branch main https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/app
-            fi
+          # 1) Si le dossier ~/prod n'existe pas, on clone la première fois
+          if [ ! -d "/home/${{ secrets.SSH_USER }}/prod" ]; then
+            echo "Clonage initial du repo (branche main) dans ~/prod"
+            git clone --branch main https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/prod
+          fi
 
-            # 2) Aller dans ~/app
-            cd /home/${{ secrets.SSH_USER }}/app
+          # 2) Aller dans ~/prod
+          cd /home/${{ secrets.SSH_USER }}/prod
 
-            # 3) S’assurer d’être sur la branche main et à jour
-            git fetch origin
-            git checkout main
-            git reset --hard origin/main
+          # 3) S’assurer d’être sur la branche main et à jour
+          git fetch origin
+          git checkout main
+          git reset --hard origin/main
 
-            # 4) Se logger sur GHCR (pour docker pull)
-            echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # 4) Se logger sur GHCR (pour docker pull)
+          echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-            # 5) Pull de la dernière image + relance des containers en prod
-            docker compose -f prod/docker-compose.yml pull
-            docker compose -f prod/docker-compose.yml up -d
+          # 5) Pull de la dernière image + relance des containers en prod
+          docker compose -f prod/docker-compose.yml pull
+          docker compose -f prod/docker-compose.yml up -d
           EOF
 
   ########################################################
@@ -176,26 +176,26 @@ jobs:
       - name: Déployer en Test sur le serveur
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            set -e
+          set -e
 
-            # 1) Si le dossier ~/app n'existe pas, on clone la première fois
-            if [ ! -d "/home/${{ secrets.SSH_USER }}/app" ]; then
-              echo "Clonage initial du repo (branche develop) dans ~/app"
-              git clone --branch develop https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/app
-            fi
+          # 1) Si le dossier ~/test n'existe pas, on clone la première fois
+          if [ ! -d "/home/${{ secrets.SSH_USER }}/test" ]; then
+            echo "Clonage initial du repo (branche develop) dans ~/test"
+            git clone --branch develop https://github.com/Cocostee/shiny-memory.git /home/${{ secrets.SSH_USER }}/test
+          fi
 
-            # 2) Aller dans ~/app
-            cd /home/${{ secrets.SSH_USER }}/app
+          # 2) Aller dans ~/test
+          cd /home/${{ secrets.SSH_USER }}/test
 
-            # 3) S’assurer d’être sur la branche develop et à jour
-            git fetch origin
-            git checkout develop
-            git reset --hard origin/develop
+          # 3) S’assurer d’être sur la branche develop et à jour
+          git fetch origin
+          git checkout develop
+          git reset --hard origin/develop
 
-            # 4) Se loguer sur GHCR (pour docker pull)
-            echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # 4) Se loguer sur GHCR (pour docker pull)
+          echo '${{ secrets.DOCKER_KEY }}' | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-            # 5) Pull de la dernière image + relance des containers en test
-            docker compose -f test/docker-compose.yml pull
-            docker compose -f test/docker-compose.yml up -d
+          # 5) Pull de la dernière image + relance des containers en test
+          docker compose -f test/docker-compose.yml pull
+          docker compose -f test/docker-compose.yml up -d
           EOF
