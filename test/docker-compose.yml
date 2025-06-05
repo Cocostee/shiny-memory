@@ -2,7 +2,10 @@ services:
   web:
     image: ghcr.io/cocostee/shiny-memory/nodejs-my-website:latest
     restart: always
-    ports:
-      - "8080:3000"
     environment:
       - NODE_ENV=development
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web-test.rule=Host(`next-test.fr`)"
+      - "traefik.http.routers.web-test.entrypoints=web"
+      - "traefik.http.services.web-test.loadbalancer.server.port=3000"
